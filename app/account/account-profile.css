@@ -1,0 +1,1 @@
+.account-page input:not([type]),.account-page input[type="text"]{border:1px solid var(--line);background:white;padding:14px;font:16px Georgia;text-transform:none;letter-spacing:0}.profile-form{padding:22px;background:var(--paper2);border:1px solid var(--line)}.profile-form small{color:var(--muted);line-height:1.5}
