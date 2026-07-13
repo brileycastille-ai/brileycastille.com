@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 const essays = [
   { title: "Beyond the Algorithm", tag: "Technology", date: "July 2026", blurb: "Are we really informed, or do we only know ‘the truth’ we are given? A personal essay on social media, misinformation, and learning to question the feed.", featured: true },
@@ -8,24 +8,13 @@ const essays = [
 
 const topics = ["All", "Democracy", "Elections", "Congress", "Supreme Court", "Media", "International", "Technology", "Texas Politics"];
 
-const reporting = [
-  { title: "Can Americans Still Agree on the Facts?", status: "Interviewing experts", expected: "Late July", color: "amber", votes: 128 },
-  { title: "Should AI Fact-Check Politicians?", status: "Gathering research", expected: "Early August", color: "amber", votes: 94 },
-  { title: "The Future of Local Journalism", status: "First draft finished", expected: "August", color: "green", votes: 76 },
-];
+type ReportingItem = { title: string; status: string; expected: string; color: string; votes: number };
+const reporting: ReportingItem[] = [];
 
-const essayIdeas = [
-  { title: "The Politics of Artificial Intelligence", stage: "Researching", overview: "Who should be responsible when an automated system makes a political decision, and what transparency should citizens be able to demand?" },
-  { title: "Why America Doesn’t Trust the News", stage: "Planning interviews", overview: "A reported look at how trust fractured, what newsrooms misunderstand about skepticism, and whether credibility can be rebuilt." },
-  { title: "What Actually Happens During Budget Negotiations", stage: "Building an outline", overview: "A plain-language trip through the deadlines, leverage, closed-door bargaining, and shutdown threats behind the federal budget." },
-  { title: "Why Gen Z Gets Political News Differently", stage: "Collecting sources", overview: "How creators, clips, group chats, and algorithms changed not only where young people find politics, but what feels trustworthy." },
-];
+type EssayIdea = { title: string; stage: string; overview: string };
+const essayIdeas: EssayIdea[] = [];
 
-const questions = [
-  { question: "Why does Congress never get anything done?", tag: "Congress", votes: 342 },
-  { question: "Can the president actually lower gas prices?", tag: "Executive Power", votes: 281 },
-  { question: "Why don’t third parties win?", tag: "Elections", votes: 219 },
-];
+type ReaderQuestion = { id: number; question: string; context: string; votes: number };
 
 export default function Home() {
   const [filter, setFilter] = useState("All");
@@ -36,13 +25,17 @@ export default function Home() {
   const [joined, setJoined] = useState(false);
   const [ideaQuestions, setIdeaQuestions] = useState<Record<string, string>>({});
   const [ideaSent, setIdeaSent] = useState<string[]>([]);
+  const [questions, setQuestions] = useState<ReaderQuestion[]>([]);
+  const [questionError, setQuestionError] = useState("");
+  const loadQuestions = useCallback(async () => { try { const response = await fetch("/api/questions", { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setQuestions(data.questions || []); setQuestionError(""); } catch { setQuestionError("Questions are temporarily unavailable."); } }, []);
+  useEffect(() => { loadQuestions(); const timer = window.setInterval(loadQuestions, 5000); return () => window.clearInterval(timer); }, [loadQuestions]);
   const filtered = useMemo(() => filter === "All" ? essays : essays.filter((essay) => essay.tag === filter), [filter]);
 
   async function submitQuestion(event: FormEvent) {
     event.preventDefault();
     if (!question.trim()) return;
     const response = await fetch("/api/questions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question, context: "standalone" }) });
-    if (response.ok) { setSubmitted(true); setQuestion(""); }
+    if (response.ok) { setSubmitted(true); setQuestion(""); await loadQuestions(); } else { setQuestionError("Your question could not be posted yet. Please try again."); }
   }
 
   async function submitIdeaQuestion(event: FormEvent, idea: string) {
@@ -55,6 +48,14 @@ export default function Home() {
 
   function toggleVote(title: string) {
     setVoted((current) => current.includes(title) ? current.filter((item) => item !== title) : [...current, title]);
+  }
+  async function toggleQuestionVote(item: ReaderQuestion) {
+    let voterKey = window.localStorage.getItem("briley-voter-key");
+    if (!voterKey) { voterKey = crypto.randomUUID(); window.localStorage.setItem("briley-voter-key", voterKey); }
+    const key = `question-${item.id}`;
+    const active = !voted.includes(key);
+    const response = await fetch(`/api/questions/${item.id}/vote`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ voterKey, active }) });
+    if (response.ok) { const data = await response.json(); setVoted((current) => active ? [...current, key] : current.filter((value) => value !== key)); setQuestions((current) => current.map((question) => question.id === item.id ? { ...question, votes: data.votes } : question)); }
   }
 
   return (
@@ -106,6 +107,7 @@ export default function Home() {
       <section className="progress-section" id="progress"><div className="wrap">
         <div className="section-heading light"><div><p className="eyebrow">Behind the reporting</p><h2>In progress</h2></div><p>Journalism takes time. Follow the research, interviews, and drafting behind the next stories.</p></div>
         <div className="progress-list">
+          {reporting.length === 0 && <p className="empty-state">No reporting updates yet. Briley will post one here when the work begins.</p>}
           {reporting.map((story) => <article className="progress-card" key={story.title}>
             <div className="status-line"><span className={`dot ${story.color}`}/><span>{story.status}</span></div>
             <h3>{story.title}</h3><div className="expected"><small>Expected</small><strong>{story.expected}</strong></div>
@@ -117,6 +119,7 @@ export default function Home() {
       <section className="ideas-section wrap" id="ideas">
         <div className="section-heading"><div><p className="eyebrow">The editorial notebook</p><h2>Essay ideas</h2></div><p>See what Briley is considering before the reporting is finished. Your questions can shape what gets investigated and may be answered in the final essay.</p></div>
         <div className="ideas-grid">
+          {essayIdeas.length === 0 && <p className="empty-state">No upcoming essay ideas have been posted yet.</p>}
           {essayIdeas.map((idea, index) => <article className="idea-card" key={idea.title}>
             <div className="idea-top"><span>Idea {String(index + 1).padStart(2, "0")}</span><small>{idea.stage}</small></div>
             <h3>{idea.title}</h3><p>{idea.overview}</p>
@@ -130,10 +133,11 @@ export default function Home() {
         <form className="question-form" onSubmit={submitQuestion}>
           <label htmlFor="question">Your question</label><textarea id="question" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Why does Congress never get anything done?" rows={5}/>
           <div><span>{question.length}/240</span><button className="button" type="submit">Submit question <span>→</span></button></div>
-          {submitted && <p className="success" role="status">Question received. Thank you for being curious.</p>}
+          {submitted && <p className="success" role="status">Question received. Thank you for being curious.</p>}{questionError && <p role="alert">{questionError}</p>}
         </form>
         <div className="reader-questions"><div className="section-rule"><span>Readers are asking</span><small>Vote for what Briley explains next</small></div>
-          {questions.map((item, i) => <article key={item.question}><button onClick={() => toggleVote(item.question)} className={voted.includes(item.question) ? "voted" : ""} aria-label={`Vote for ${item.question}`}><span>↑</span>{item.votes + (voted.includes(item.question) ? 1 : 0)}</button><span className="rank">0{i + 1}</span><div><small>{item.tag}</small><h3>{item.question}</h3></div></article>)}
+          {questions.length === 0 && <p className="empty-state">No reader questions have been published yet.</p>}
+          {questions.map((item, i) => <article key={item.id}><button onClick={() => toggleQuestionVote(item)} className={voted.includes(`question-${item.id}`) ? "voted" : ""} aria-label={`Vote for ${item.question}`}><span>↑</span>{item.votes}</button><span className="rank">{String(i + 1).padStart(2, "0")}</span><div><small>{item.context === "standalone" ? "Reader question" : item.context}</small><h3>{item.question}</h3></div></article>)}
         </div>
       </section>
 
@@ -145,3 +149,4 @@ export default function Home() {
     </main>
   );
 }
+
