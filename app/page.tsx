@@ -66,7 +66,7 @@ export default function Home() {
         <p>Political Journalist <i>·</i> Writer <i>·</i> Student</p>
       </header>
       <nav className="nav" aria-label="Main navigation">
-        <a href="#home">Home</a><a href="#essays">Essays</a><a href="#progress">In progress</a><a href="#ideas">Essay ideas</a><a href="#ask">Question box</a><a href="#about">About</a><a href="/account">Sign in</a>
+        <a href="#home">Home</a><a href="#essays">Essays</a><a href="#progress">In progress</a><a href="#ideas">Essay ideas</a><a href="#ask">Question box</a><a href="/discussion">Discussion</a><a href="#about">About</a><a href="/account">Sign in</a>
       </nav>
 
       <section className="hero wrap">
@@ -137,7 +137,7 @@ export default function Home() {
         </form>
         <div className="reader-questions"><div className="section-rule"><span>Readers are asking</span><small>Vote for what Briley explains next</small></div>
           {questions.length === 0 && <p className="empty-state">No reader questions have been published yet.</p>}
-          {questions.map((item, i) => <article key={item.id}><button onClick={() => toggleQuestionVote(item)} className={voted.includes(`question-${item.id}`) ? "voted" : ""} aria-label={`Vote for ${item.question}`}><span>↑</span>{item.votes}</button><span className="rank">{String(i + 1).padStart(2, "0")}</span><div><small>{item.context === "standalone" ? "Reader question" : item.context}</small><h3>{item.question}</h3></div></article>)}
+          {questions.map((item, i) => <article key={item.id}><button onClick={() => toggleQuestionVote(item)} className={voted.includes(`question-${item.id}`) ? "voted" : ""} aria-label={`Vote for ${item.question}`}><span>↑</span>{item.votes}</button><span className="rank">{String(i + 1).padStart(2, "0")}</span><div><small>{item.context === "standalone" ? "Reader question" : item.context}</small><h3><a href={`/discussion#question-${item.id}`}>{item.question}</a></h3><a href={`/discussion#question-${item.id}`}>Read and reply</a></div></article>)}
         </div>
       </section>
 
