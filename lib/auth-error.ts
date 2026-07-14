@@ -1,7 +1,7 @@
 export type AuthAction = "signup" | "signin" | "resend" | "guest" | "callback";
 
 const fallbackMessages: Record<AuthAction, string> = {
-  signup: "Account verification email is temporarily unavailable. Please try again later or continue anonymously.",
+  signup: "We could not create your account right now. Please try again or continue anonymously.",
   signin: "We could not sign you in. Check your email and password, then try again.",
   resend: "A new verification email could not be sent right now. Please try again later.",
   guest: "Anonymous access is temporarily unavailable. Please try again later.",
