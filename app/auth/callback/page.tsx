@@ -3,6 +3,7 @@
 import {useEffect, useState} from "react";
 import {useRouter} from "next/navigation";
 import {getSupabaseBrowser} from "../../../lib/supabase-browser";
+import {readableAuthError} from "../../../lib/auth-error";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function AuthCallbackPage() {
       const code = new URLSearchParams(window.location.search).get("code");
       if (code) {
         const {error} = await supabase.auth.exchangeCodeForSession(code);
-        if (error) return setMessage(error.message);
+        if (error) return setMessage(readableAuthError(error, "callback"));
       } else {
         await new Promise((resolve) => window.setTimeout(resolve, 500));
         const {data, error} = await supabase.auth.getSession();
