@@ -58,6 +58,24 @@ create table if not exists question_votes (
   primary key (question_id, voter_key)
 );
 
+alter table question_votes add column if not exists voter_key text;
+update question_votes set voter_key = 'user:' || user_id::text where voter_key is null and user_id is not null;
+alter table question_votes drop constraint if exists question_votes_pkey;
+alter table question_votes alter column user_id drop not null;
+alter table question_votes alter column voter_key set not null;
+alter table question_votes add constraint question_votes_pkey primary key (question_id, voter_key);
+
+create table if not exists notifications (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users on delete cascade,
+  kind text not null,
+  title text not null,
+  message text not null,
+  href text not null default '/account',
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists publication_settings (
   id text primary key default 'main',
   about_heading text not null default 'I have always been fascinated by the questions behind the headlines.',
@@ -76,6 +94,7 @@ alter table reporting enable row level security;
 alter table progress_votes enable row level security;
 alter table question_votes enable row level security;
 alter table publication_settings enable row level security;
+alter table notifications enable row level security;
 
 drop policy if exists "Reporting is public" on reporting;
 create policy "Reporting is public" on reporting for select using (true);
@@ -85,3 +104,7 @@ drop policy if exists "Question vote totals are public" on question_votes;
 create policy "Question vote totals are public" on question_votes for select using (true);
 drop policy if exists "Publication settings are public" on publication_settings;
 create policy "Publication settings are public" on publication_settings for select using (true);
+drop policy if exists "Readers see own notifications" on notifications;
+create policy "Readers see own notifications" on notifications for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "Readers update own notifications" on notifications;
+create policy "Readers update own notifications" on notifications for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
