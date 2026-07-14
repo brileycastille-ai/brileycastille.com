@@ -64,9 +64,18 @@ export default function AccountPage() {
     if (mode === "signup") {
       if (!publicName.trim()) return setMessage("Choose a public name first.");
       setIsSubmitting(true);
-      const {error} = await supabase.auth.signUp({email, password, options: {emailRedirectTo: `${window.location.origin}/auth/callback`, data: {preferences: prefs, display_name: publicName.trim()}}});
+      const {data, error} = await supabase.auth.signUp({email, password, options: {data: {preferences: prefs, display_name: publicName.trim()}}});
       setIsSubmitting(false);
       if (error) return setMessage(readableAuthError(error, "signup"));
+      if (data.session) {
+        setSignedInEmail(data.session.user.email || "");
+        setAccessToken(data.session.access_token);
+        setSignupComplete(false);
+        setShowResend(false);
+        setMessage("Your account was created and you are signed in.");
+        loadProfile(data.session.access_token);
+        return;
+      }
       setSignupComplete(true);
       setShowResend(false);
       setMessage("Your account was created. Check your inbox and click the verification link to finish signing in.");
