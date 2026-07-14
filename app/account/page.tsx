@@ -2,6 +2,7 @@
 
 import {FormEvent, useEffect, useState} from "react";
 import {getSupabaseBrowser} from "../../lib/supabase-browser";
+import {readableAuthError} from "../../lib/auth-error";
 import "./account.css";
 import "./account-extra.css";
 import "./account-profile.css";
@@ -65,7 +66,7 @@ export default function AccountPage() {
       setIsSubmitting(true);
       const {error} = await supabase.auth.signUp({email, password, options: {emailRedirectTo: `${window.location.origin}/auth/callback`, data: {preferences: prefs, display_name: publicName.trim()}}});
       setIsSubmitting(false);
-      if (error) return setMessage(error.message);
+      if (error) return setMessage(readableAuthError(error, "signup"));
       setSignupComplete(true);
       setShowResend(false);
       setMessage("Your account was created. Check your inbox and click the verification link to finish signing in.");
@@ -74,14 +75,14 @@ export default function AccountPage() {
     setIsSubmitting(true);
     const {error} = await supabase.auth.signInWithPassword({email, password});
     setIsSubmitting(false);
-    setMessage(error?.message || (mode === "creator" ? "Creator sign-in successful. You can open Creator Studio." : "You are signed in."));
+    setMessage(error ? readableAuthError(error, "signin") : mode === "creator" ? "Creator sign-in successful. You can open Creator Studio." : "You are signed in.");
   }
 
   async function continueAsGuest() {
     const supabase = getSupabaseBrowser();
     if (!supabase) return setMessage("The guest sign-in service is temporarily unavailable.");
     const {error} = await supabase.auth.signInAnonymously();
-    setMessage(error?.message || "You are continuing with an anonymous guest account on this device.");
+    setMessage(error ? readableAuthError(error, "guest") : "You are continuing with an anonymous guest account on this device.");
   }
 
   async function resendConfirmation() {
@@ -91,7 +92,7 @@ export default function AccountPage() {
     setIsSubmitting(true);
     const {error} = await supabase.auth.resend({type: "signup", email, options: {emailRedirectTo: `${window.location.origin}/auth/callback`}});
     setIsSubmitting(false);
-    setMessage(error?.message || "A new verification email has been sent.");
+    setMessage(error ? readableAuthError(error, "resend") : "A new verification email has been sent.");
     if (!error) {
       setResendCooldown(60);
       const timer = window.setInterval(() => setResendCooldown((seconds) => {
