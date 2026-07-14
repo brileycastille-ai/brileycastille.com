@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./ideas.css";
+import NotificationBell from "./notification-bell";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://brileycastille.com"),
@@ -18,5 +19,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><NotificationBell/>{children}</body></html>;
 }
