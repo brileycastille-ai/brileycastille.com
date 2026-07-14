@@ -33,7 +33,30 @@ export default function Home() {
   const [questionError, setQuestionError] = useState("");
   const loadQuestions = useCallback(async () => { try { const response = await fetch("/api/questions", { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setQuestions(data.questions || []); setQuestionError(""); } catch { setQuestionError("Questions are temporarily unavailable."); } }, []);
   const loadPublication = useCallback(async () => {try {const response = await fetch("/api/publication", {cache: "no-store"}); const data = await response.json(); if (!response.ok) throw new Error(); setReporting(data.reporting || []); setEssayIdeas(data.ideas || []); setSettings(data.settings || null);} catch {}}, []);
-  useEffect(() => { loadQuestions(); loadPublication(); const timer = window.setInterval(() => {loadQuestions(); loadPublication();}, 5000); const supabase = getSupabaseBrowser(); supabase?.auth.getSession().then(async ({data}) => {const token = data.session?.access_token; if (!token) return; const response = await fetch("/api/profile", {headers: {authorization: `Bearer ${token}`}}); if(response.ok){const profile = await response.json(); setSignedInName(profile.username || "Reader");}}); return () => window.clearInterval(timer); }, [loadQuestions, loadPublication]);
+  useEffect(() => {
+    const refreshContent = () => {
+      if (document.visibilityState !== "visible") return;
+      loadQuestions();
+      loadPublication();
+    };
+    refreshContent();
+    window.addEventListener("focus", refreshContent);
+    document.addEventListener("visibilitychange", refreshContent);
+    const supabase = getSupabaseBrowser();
+    supabase?.auth.getSession().then(async ({data}) => {
+      const token = data.session?.access_token;
+      if (!token) return;
+      const response = await fetch("/api/profile", {headers: {authorization: `Bearer ${token}`}});
+      if (response.ok) {
+        const profile = await response.json();
+        setSignedInName(profile.username || "Reader");
+      }
+    });
+    return () => {
+      window.removeEventListener("focus", refreshContent);
+      document.removeEventListener("visibilitychange", refreshContent);
+    };
+  }, [loadQuestions, loadPublication]);
   const filtered = useMemo(() => filter === "All" ? essays : essays.filter((essay) => essay.tag === filter), [filter]);
 
   async function submitQuestion(event: FormEvent) {
