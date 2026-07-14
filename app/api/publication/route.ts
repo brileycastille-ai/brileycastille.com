@@ -1,5 +1,6 @@
 import {getSupabaseAdmin} from "../../../lib/supabase-server";
 import {requireCreator} from "../../../lib/creator-auth";
+import {notifySubscribers} from "../../../lib/notifications";
 
 export async function GET() {
   try {
@@ -34,12 +35,14 @@ export async function POST(request: Request) {
       if (!title || !overview) return Response.json({error: "A title and description are required."}, {status: 400});
       const {error} = await creator.supabase.from("essay_ideas").insert({title, overview, stage: payload.stage?.trim() || "Idea"});
       if (error) throw error;
+      await notifySubscribers(creator.supabase, "notify_new_idea", {kind: "new_idea", title: `New essay idea: ${title}`, message: overview, href: "/#ideas"});
     } else if (payload.type === "reporting") {
       const title = payload.title?.trim();
       const description = payload.description?.trim();
       if (!title || !description) return Response.json({error: "A title and description are required."}, {status: 400});
       const {error} = await creator.supabase.from("reporting").insert({title, description, status: payload.status?.trim() || "Planning", expected: payload.expected?.trim() || "To be announced", color: payload.color === "green" ? "green" : "amber"});
       if (error) throw error;
+      await notifySubscribers(creator.supabase, "notify_new_idea", {kind: "new_idea", title: `New story in progress: ${title}`, message: description, href: "/#progress"});
     } else if (payload.type === "about") {
       const about_heading = payload.heading?.trim();
       const about_body = payload.body?.trim();
