@@ -23,6 +23,10 @@ export default function AccountPage() {
   const [signedInEmail, setSignedInEmail] = useState("");
   const [publicName, setPublicName] = useState("");
   const [accessToken, setAccessToken] = useState("");
+  const [signupComplete, setSignupComplete] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [prefs, setPrefs] = useState<Record<string, boolean>>(Object.fromEntries(choices.map(([key]) => [key, true])));
 
   useEffect(() => {
@@ -45,21 +49,31 @@ export default function AccountPage() {
   function changeMode(nextMode: "signin" | "signup" | "creator") {
     setMode(nextMode);
     setMessage("");
+    setSignupComplete(false);
+    setShowResend(false);
     if (nextMode === "creator") setEmail(CREATOR_EMAIL);
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (isSubmitting) return;
     const supabase = getSupabaseBrowser();
     if (!supabase) return setMessage("The sign-in service is temporarily unavailable.");
     if (mode === "creator" && email.toLowerCase() !== CREATOR_EMAIL) return setMessage("Creator access is limited to Briley's email address.");
     if (mode === "signup") {
       if (!publicName.trim()) return setMessage("Choose a public name first.");
+      setIsSubmitting(true);
       const {error} = await supabase.auth.signUp({email, password, options: {emailRedirectTo: `${window.location.origin}/auth/callback`, data: {preferences: prefs, display_name: publicName.trim()}}});
-      setMessage(error?.message || "Check your email and click the verification link. It will return you to this website.");
+      setIsSubmitting(false);
+      if (error) return setMessage(error.message);
+      setSignupComplete(true);
+      setShowResend(false);
+      setMessage("Your account was created. Check your inbox and click the verification link to finish signing in.");
       return;
     }
+    setIsSubmitting(true);
     const {error} = await supabase.auth.signInWithPassword({email, password});
+    setIsSubmitting(false);
     setMessage(error?.message || (mode === "creator" ? "Creator sign-in successful. You can open Creator Studio." : "You are signed in."));
   }
 
@@ -73,8 +87,21 @@ export default function AccountPage() {
   async function resendConfirmation() {
     const supabase = getSupabaseBrowser();
     if (!supabase || !email) return setMessage("Enter your email address first.");
+    if (resendCooldown > 0) return;
+    setIsSubmitting(true);
     const {error} = await supabase.auth.resend({type: "signup", email, options: {emailRedirectTo: `${window.location.origin}/auth/callback`}});
+    setIsSubmitting(false);
     setMessage(error?.message || "A new verification email has been sent.");
+    if (!error) {
+      setResendCooldown(60);
+      const timer = window.setInterval(() => setResendCooldown((seconds) => {
+        if (seconds <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+        return seconds - 1;
+      }), 1000);
+    }
   }
 
   async function signOut() {
@@ -115,14 +142,14 @@ export default function AccountPage() {
       {!signedInEmail && <>
         {mode !== "creator" && <div className="account-tabs"><button onClick={() => changeMode("signin")} className={mode === "signin" ? "active" : ""}>Reader sign in</button><button onClick={() => changeMode("signup")} className={mode === "signup" ? "active" : ""}>Create account</button></div>}
         {mode === "creator" && <p className="eyebrow">Creator sign in</p>}
-        <form onSubmit={submit}>
+        {!signupComplete && <form onSubmit={submit}>
           <label>Email<input type="email" required value={email} readOnly={mode === "creator"} onChange={(event) => setEmail(event.target.value)}/></label>
           <label>Password<input type="password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)}/></label>
           {mode === "signup" && <label>Public name<input required minLength={3} maxLength={30} value={publicName} onChange={(event) => setPublicName(event.target.value)} placeholder="How your name appears publicly"/></label>}
           {mode === "signup" && <fieldset><legend>Tell me when</legend>{choices.map(([key, label]) => <label className="check" key={key}><input type="checkbox" checked={prefs[key]} onChange={(event) => setPrefs({...prefs, [key]: event.target.checked})}/>{label}</label>)}</fieldset>}
-          <button className="button" type="submit">{mode === "signup" ? "Create my account" : mode === "creator" ? "Sign in as Briley" : "Sign in"}</button>
-        </form>
-        {mode === "signup" && <button className="resend" type="button" onClick={resendConfirmation}>Resend verification email</button>}
+          <button className="button" type="submit" disabled={isSubmitting}>{isSubmitting ? "Please wait" : mode === "signup" ? "Create my account" : mode === "creator" ? "Sign in as Briley" : "Sign in"}</button>
+        </form>}
+        {mode === "signup" && signupComplete && <div className="verification-help"><strong>Verification email sent</strong><p>Use the link in the email to finish setting up your account.</p>{!showResend ? <button className="resend" type="button" onClick={() => setShowResend(true)}>I did not receive the email</button> : <button className="resend" type="button" disabled={isSubmitting || resendCooldown > 0} onClick={resendConfirmation}>{resendCooldown > 0 ? `Send another email in ${resendCooldown} seconds` : "Send another verification email"}</button>}</div>}
         {mode !== "creator" && <div className="guest"><span>or</span><button type="button" onClick={continueAsGuest}>Continue anonymously</button><small>No email or password is required. Anonymous accounts cannot receive email updates.</small></div>}
       </>}
       {message && <p className="account-message" role="status">{message}</p>}
