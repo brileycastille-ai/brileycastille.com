@@ -5,13 +5,23 @@ export type NotificationPreference = "notify_new_idea" | "notify_new_work" | "no
 
 type Notice = {kind: string; title: string; message: string; href: string};
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
 async function emailNotice(email: string | null, notice: Notice) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.NOTIFICATION_FROM_EMAIL;
   if (!apiKey || !from || !email) return;
   const url = new URL(notice.href, "https://brileycastille.com").toString();
   try {
-    await new Resend(apiKey).emails.send({from, to: email, subject: notice.title, html: `<h1>${notice.title}</h1><p>${notice.message}</p><p><a href="${url}">View this update</a></p><p>You received this because this update is enabled in your Briley Castille publication preferences.</p>`});
+    await new Resend(apiKey).emails.send({from, to: email, subject: notice.title, html: `<h1>${escapeHtml(notice.title)}</h1><p>${escapeHtml(notice.message)}</p><p><a href="${escapeHtml(url)}">View this update</a></p><p>You received this because this update is enabled in your Briley Castille publication preferences.</p>`});
   } catch {
     // The in-site notification remains available if email delivery is temporarily unavailable.
   }
