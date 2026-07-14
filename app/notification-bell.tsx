@@ -23,8 +23,14 @@ export default function NotificationBell() {
     refresh();
     const supabase = getSupabaseBrowser();
     const listener = supabase?.auth.onAuthStateChange(() => refresh());
-    const timer = window.setInterval(refresh, 30000);
-    return () => {window.clearInterval(timer); listener?.data.subscription.unsubscribe();};
+    const refreshWhenVisible = () => {if (document.visibilityState === "visible") refresh();};
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      listener?.data.subscription.unsubscribe();
+    };
   }, [refresh]);
 
   if (!visible) return null;
