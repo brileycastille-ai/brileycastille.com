@@ -39,7 +39,7 @@ export default function AccountPage() {
 
   async function loadProfile(token: string) {
     const response = await fetch("/api/profile", {headers: {authorization: `Bearer ${token}`}, cache: "no-store"});
-    if (response.ok) {const data = await response.json(); setPublicName(data.username || "");}
+    if (response.ok) {const data = await response.json(); setPublicName(data.username || ""); if(data.preferences) setPrefs(data.preferences);}
   }
 
   function changeMode(nextMode: "signin" | "signup" | "creator") {
@@ -94,6 +94,14 @@ export default function AccountPage() {
     setMessage(response.ok ? "Your public name has been saved." : data.error || "Your public name could not be saved.");
   }
 
+  async function savePreferences(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken) return;
+    const response = await fetch("/api/profile", {method: "PUT", headers: {"content-type": "application/json", authorization: `Bearer ${accessToken}`}, body: JSON.stringify({preferences: prefs})});
+    const data = await response.json();
+    setMessage(response.ok ? "Your notification choices have been saved." : data.error || "Your notification choices could not be saved.");
+  }
+
   const isCreator = signedInEmail.toLowerCase() === CREATOR_EMAIL;
 
   return <main className="account-page">
@@ -103,6 +111,7 @@ export default function AccountPage() {
       <h1>Choose how you follow the work.</h1>
       <p>Readers can use an email account or continue anonymously. Briley has a separate protected creator sign-in.</p>
       {signedInEmail && <><div className="signed-in-card"><strong>Signed in as {signedInEmail}</strong><div>{isCreator && <a href="/studio">Open Creator Studio</a>}<button type="button" onClick={signOut}>Sign out</button></div></div>{!isCreator && signedInEmail !== "Guest account" && <form className="profile-form" onSubmit={savePublicName}><label>Public name<input required minLength={3} maxLength={30} value={publicName} onChange={(event) => setPublicName(event.target.value)} placeholder="How your name appears publicly"/></label><small>This name appears on your questions and comments unless you choose Anonymous when posting.</small><button className="button" type="submit">Save public name</button></form>}</>}
+      {signedInEmail && !isCreator && signedInEmail !== "Guest account" && <form className="profile-form notification-settings" onSubmit={savePreferences}><h2>Notification choices</h2><p>Choose which updates appear in your notification inbox and are sent to your signup email.</p><fieldset><legend>Tell me when</legend>{choices.map(([key, label]) => <label className="check" key={key}><input type="checkbox" checked={prefs[key]} onChange={(event) => setPrefs({...prefs, [key]: event.target.checked})}/>{label}</label>)}</fieldset><div className="preference-actions"><a href="/notifications">Open notifications</a><button className="button" type="submit">Save notification choices</button></div></form>}
       {!signedInEmail && <>
         {mode !== "creator" && <div className="account-tabs"><button onClick={() => changeMode("signin")} className={mode === "signin" ? "active" : ""}>Reader sign in</button><button onClick={() => changeMode("signup")} className={mode === "signup" ? "active" : ""}>Create account</button></div>}
         {mode === "creator" && <p className="eyebrow">Creator sign in</p>}
