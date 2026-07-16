@@ -5,7 +5,7 @@ import {getSupabaseBrowser} from "../lib/supabase-browser";
 import "./home-engagement.css";
 
 const builtInEssays = [
-  { slug: "beyond-the-algorithm", title: "Beyond the Algorithm", tag: "Technology", date: "July 2026", blurb: "Are we really informed, or do we only know ‘the truth’ we are given? A personal essay on social media, misinformation, and learning to question the feed.", readMinutes: 7 },
+  { slug: "beyond-the-algorithm", title: "Beyond the Algorithm", tag: "Technology · Media", topics: ["Technology", "Media"], date: "July 2026", blurb: "Are we really informed, or do we only know ‘the truth’ we are given? A personal essay on social media, misinformation, and learning to question the feed.", readMinutes: 7 },
 ];
 
 const topics = ["All", "Democracy", "Elections", "Congress", "Supreme Court", "Media", "International", "Technology", "Texas Politics"];
@@ -16,7 +16,7 @@ type EssayIdea = { id: number; title: string; stage: string; overview: string };
 
 type ReaderQuestion = { id: number; question: string; context: string; display_name: string; votes: number };
 type PublicationSettings = {about_heading: string; about_body: string; about_photo_url?: string | null};
-type UploadedEssay = {slug: string; title: string; dek: string; published_at: string; read_minutes: number};
+type UploadedEssay = {slug: string; title: string; dek: string; topics: string[]; published_at: string; read_minutes: number};
 
 export default function Home() {
   const [filter, setFilter] = useState("All");
@@ -62,12 +62,12 @@ export default function Home() {
     };
   }, [loadQuestions, loadPublication, loadEssays]);
   const essays = useMemo(() => {
-    const uploaded = uploadedEssays.map((essay) => ({slug: essay.slug, title: essay.title, tag: "Essay", date: new Date(essay.published_at).toLocaleDateString("en-US", {month: "long", year: "numeric"}), blurb: essay.dek, readMinutes: essay.read_minutes}));
+    const uploaded = uploadedEssays.map((essay) => ({slug: essay.slug, title: essay.title, tag: essay.topics.join(" · "), topics: essay.topics, date: new Date(essay.published_at).toLocaleDateString("en-US", {month: "long", year: "numeric"}), blurb: essay.dek, readMinutes: essay.read_minutes}));
     const uploadedSlugs = new Set(uploaded.map((essay) => essay.slug));
     return [...uploaded, ...builtInEssays.filter((essay) => !uploadedSlugs.has(essay.slug))];
   }, [uploadedEssays]);
   const latestEssay = essays[0];
-  const filtered = useMemo(() => filter === "All" ? essays : essays.filter((essay) => essay.tag === filter), [filter, essays]);
+  const filtered = useMemo(() => filter === "All" ? essays : essays.filter((essay) => essay.topics.includes(filter)), [filter, essays]);
 
   async function submitQuestion(event: FormEvent) {
     event.preventDefault();
