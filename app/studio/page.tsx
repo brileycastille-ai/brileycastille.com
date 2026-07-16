@@ -14,8 +14,11 @@ type Settings = {about_heading: string; about_body: string; about_photo_url?: st
 
 export default function Studio() {
   const [title, setTitle] = useState("");
+  const [essayDescription, setEssayDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [uploadKey, setUploadKey] = useState(0);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -32,6 +35,7 @@ export default function Studio() {
   const [progressDescription, setProgressDescription] = useState("");
   const [progressStatus, setProgressStatus] = useState("Planning");
   const [progressExpected, setProgressExpected] = useState("To be announced");
+  const [editingProgressId, setEditingProgressId] = useState<number | null>(null);
   const [aboutPhoto, setAboutPhoto] = useState<File | null>(null);
   const [answerSlugs, setAnswerSlugs] = useState<Record<number, string>>({});
 
@@ -74,12 +78,28 @@ export default function Studio() {
   async function publish(event: FormEvent) {
     event.preventDefault();
     if (!token || !authorized) return setMessage("Creator sign-in is required.");
-    const form = new FormData();
-    form.set("title", title);
-    if (file) form.set("file", file);
-    const response = await fetch("/api/works", {method: "POST", headers: {authorization: `Bearer ${token}`}, body: form});
-    const data = await response.json();
-    setMessage(response.ok ? `Published. Your essay is live at /essays/${data.slug}` : data.error);
+    if (!file) return setMessage("Choose a Word document first.");
+    if (file.size > 8 * 1024 * 1024) return setMessage("The Word document must be smaller than 8 MB.");
+    setPublishing(true);
+    setMessage("Publishing your essay...");
+    try {
+      const form = new FormData();
+      form.set("title", title);
+      form.set("description", essayDescription);
+      form.set("file", file);
+      const response = await fetch("/api/works", {method: "POST", headers: {authorization: `Bearer ${token}`}, body: form});
+      const data = await response.json().catch(() => ({error: "The publishing service returned an unreadable response."}));
+      if (!response.ok) return setMessage(data.error || "The essay could not be published.");
+      setMessage(`Published. Your essay is live at /essays/${data.slug}`);
+      setTitle("");
+      setEssayDescription("");
+      setFile(null);
+      setUploadKey((current) => current + 1);
+    } catch {
+      setMessage("The upload was interrupted. Check your connection and try again.");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function addIdea(event: FormEvent) {
@@ -89,7 +109,29 @@ export default function Studio() {
 
   async function addProgress(event: FormEvent) {
     event.preventDefault();
-    try {await creatorRequest({type: "reporting", title: progressTitle, description: progressDescription, status: progressStatus, expected: progressExpected}); setProgressTitle(""); setProgressDescription(""); setMessage("In-progress story posted.");} catch (error) {setMessage(error instanceof Error ? error.message : "The progress item could not be posted.");}
+    try {
+      await creatorRequest({type: editingProgressId ? "reporting_update" : "reporting", id: editingProgressId ? String(editingProgressId) : "", title: progressTitle, description: progressDescription, status: progressStatus, expected: progressExpected});
+      setProgressTitle(""); setProgressDescription(""); setProgressStatus("Planning"); setProgressExpected("To be announced"); setEditingProgressId(null);
+      setMessage(editingProgressId ? "In-progress story updated." : "In-progress story posted.");
+    } catch (error) {setMessage(error instanceof Error ? error.message : "The progress item could not be saved.");}
+  }
+
+  function editProgress(item: Reporting) {
+    setEditingProgressId(item.id);
+    setProgressTitle(item.title);
+    setProgressDescription(item.description);
+    setProgressStatus(item.status);
+    setProgressExpected(item.expected);
+    setMessage("Editing the selected in-progress story.");
+  }
+
+  function cancelProgressEdit() {
+    setEditingProgressId(null);
+    setProgressTitle("");
+    setProgressDescription("");
+    setProgressStatus("Planning");
+    setProgressExpected("To be announced");
+    setMessage("");
   }
 
   async function saveAbout(event: FormEvent) {
@@ -149,9 +191,9 @@ export default function Studio() {
   }
 
   return <main className="studio"><a href="/">Back to publication</a><section><p className="eyebrow">Private newsroom</p><h1>Creator Studio</h1><p>Only <strong>brileycastille@gmail.com</strong> can publish, edit the publication, reply as Briley, or remove content.</p>{message && <p className="studio-message" role="status">{message}</p>}{!authorized && <p><a className="button" href="/account?creator=1">Go to Creator sign in</a></p>}{authorized && <>
-    <div className="studio-panel"><h2>Publish a new work</h2><form onSubmit={publish}><label>Essay title<input required value={title} onChange={(event) => setTitle(event.target.value)}/></label><label>Word document<input required type="file" accept=".docx" onChange={(event) => setFile(event.target.files?.[0] || null)}/></label><button className="button" type="submit">Publish essay</button></form></div>
+    <div className="studio-panel"><h2>Publish a new work</h2><p>Enter the title here. You do not need to repeat the title inside the Word document. The website formats it automatically.</p><form onSubmit={publish}><label>Essay title<input required value={title} onChange={(event) => setTitle(event.target.value)}/></label><label>Short description<textarea required maxLength={500} rows={4} value={essayDescription} onChange={(event) => setEssayDescription(event.target.value)} placeholder="A short summary that will appear on the homepage and essay archive."/></label><small>{essayDescription.length}/500 characters</small><label>Word document<input key={uploadKey} required type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setFile(event.target.files?.[0] || null)}/></label><small>Use a .docx file smaller than 8 MB.</small><button className="button" type="submit" disabled={publishing}>{publishing ? "Publishing..." : "Publish essay"}</button></form></div>
     <div className="studio-panel"><h2>Post an essay idea</h2><p>Add the working title and a description of what the essay may contain.</p><form onSubmit={addIdea}><label>Title<input required value={ideaTitle} onChange={(event) => setIdeaTitle(event.target.value)}/></label><label>Description<textarea required rows={5} value={ideaDescription} onChange={(event) => setIdeaDescription(event.target.value)}/></label><label>Stage<input value={ideaStage} onChange={(event) => setIdeaStage(event.target.value)}/></label><button className="button" type="submit">Post essay idea</button></form>{ideas.map((idea) => <article key={idea.id}><small>{idea.stage}</small><h3>{idea.title}</h3><p>{idea.overview}</p><button className="danger" type="button" onClick={() => removeItem("idea", idea.id)}>Remove idea</button></article>)}</div>
-    <div className="studio-panel"><h2>Post an in-progress story</h2><p>Only post a reporting status that is currently accurate. Votes begin at zero.</p><form onSubmit={addProgress}><label>Title<input required value={progressTitle} onChange={(event) => setProgressTitle(event.target.value)}/></label><label>Description<textarea required rows={5} value={progressDescription} onChange={(event) => setProgressDescription(event.target.value)}/></label><label>Current status<input required value={progressStatus} onChange={(event) => setProgressStatus(event.target.value)}/></label><label>Expected date<input value={progressExpected} onChange={(event) => setProgressExpected(event.target.value)}/></label><button className="button" type="submit">Post in progress</button></form>{reporting.map((item) => <article key={item.id}><small>{item.status} | {item.expected}</small><h3>{item.title}</h3><p>{item.description}</p><button className="danger" type="button" onClick={() => removeItem("reporting", item.id)}>Remove item</button></article>)}</div>
+    <div className="studio-panel"><h2>{editingProgressId ? "Edit an in-progress story" : "Post an in-progress story"}</h2><p>Update the status whenever your work changes. Votes stay attached to the same story.</p><form onSubmit={addProgress}><label>Title<input required value={progressTitle} onChange={(event) => setProgressTitle(event.target.value)}/></label><label>Description<textarea required rows={5} value={progressDescription} onChange={(event) => setProgressDescription(event.target.value)}/></label><label>Current status<input required value={progressStatus} onChange={(event) => setProgressStatus(event.target.value)} placeholder="First draft underway"/></label><label>Expected date<input value={progressExpected} onChange={(event) => setProgressExpected(event.target.value)}/></label><div className="moderation-actions"><button className="button" type="submit">{editingProgressId ? "Save changes" : "Post in progress"}</button>{editingProgressId && <button type="button" onClick={cancelProgressEdit}>Cancel edit</button>}</div></form>{reporting.map((item) => <article key={item.id}><small>{item.status} | {item.expected}</small><h3>{item.title}</h3><p>{item.description}</p><div className="moderation-actions"><button type="button" onClick={() => editProgress(item)}>Edit</button><button className="danger" type="button" onClick={() => removeItem("reporting", item.id)}>Remove item</button></div></article>)}</div>
     <div className="studio-panel"><h2>Edit About Briley</h2><form onSubmit={saveAbout}><label>About heading<input required value={settings.about_heading} onChange={(event) => setSettings((current) => ({...current, about_heading: event.target.value}))}/></label><label>Introduction<textarea required rows={8} value={settings.about_body} onChange={(event) => setSettings((current) => ({...current, about_body: event.target.value}))}/></label><label>About photo<input type="file" accept="image/*" onChange={(event) => setAboutPhoto(event.target.files?.[0] || null)}/></label>{settings.about_photo_url && <img className="studio-photo" src={settings.about_photo_url} alt="Current About photo"/>}<button className="button" type="submit">Save About section</button></form></div>
     <div className="studio-panel"><h2>Reader accounts</h2><p>This private list shows email accounts that registered. Anonymous guest sessions are not listed.</p>{readers.length === 0 ? <p>No registered readers yet.</p> : readers.map((reader) => <article key={reader.id}><strong>{reader.email}</strong><p>{reader.confirmed_at ? "Email verified" : "Waiting for email verification"} | Joined {new Date(reader.created_at).toLocaleDateString()}</p></article>)}</div>
     <div className="studio-panel"><h2>Standalone questions</h2>{questions.length === 0 ? <p>No reader questions yet.</p> : questions.map((question) => <article key={question.id}><small>{question.context} | {question.display_name}</small><p>{question.question}</p><label>Essay address name<input value={answerSlugs[question.id] || ""} onChange={(event) => setAnswerSlugs((current) => ({...current, [question.id]: event.target.value}))} placeholder="beyond-the-algorithm"/></label><div className="moderation-actions"><button type="button" onClick={() => markAnswered(question)}>Mark answered and notify reader</button><button className="danger" type="button" onClick={() => deleteQuestion(question)}>Delete question</button></div></article>)}</div>
