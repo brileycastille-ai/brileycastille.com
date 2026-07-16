@@ -4,8 +4,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {getSupabaseBrowser} from "../lib/supabase-browser";
 import "./home-engagement.css";
 
-const essays = [
-  { title: "Beyond the Algorithm", tag: "Technology", date: "July 2026", blurb: "Are we really informed, or do we only know ‘the truth’ we are given? A personal essay on social media, misinformation, and learning to question the feed.", featured: true },
+const builtInEssays = [
+  { slug: "beyond-the-algorithm", title: "Beyond the Algorithm", tag: "Technology", date: "July 2026", blurb: "Are we really informed, or do we only know ‘the truth’ we are given? A personal essay on social media, misinformation, and learning to question the feed.", readMinutes: 7 },
 ];
 
 const topics = ["All", "Democracy", "Elections", "Congress", "Supreme Court", "Media", "International", "Technology", "Texas Politics"];
@@ -16,6 +16,7 @@ type EssayIdea = { id: number; title: string; stage: string; overview: string };
 
 type ReaderQuestion = { id: number; question: string; context: string; display_name: string; votes: number };
 type PublicationSettings = {about_heading: string; about_body: string; about_photo_url?: string | null};
+type UploadedEssay = {slug: string; title: string; dek: string; published_at: string; read_minutes: number};
 
 export default function Home() {
   const [filter, setFilter] = useState("All");
@@ -28,16 +29,19 @@ export default function Home() {
   const [reporting, setReporting] = useState<ReportingItem[]>([]);
   const [essayIdeas, setEssayIdeas] = useState<EssayIdea[]>([]);
   const [settings, setSettings] = useState<PublicationSettings | null>(null);
+  const [uploadedEssays, setUploadedEssays] = useState<UploadedEssay[]>([]);
   const [anonymous, setAnonymous] = useState(false);
   const [signedInName, setSignedInName] = useState("");
   const [questionError, setQuestionError] = useState("");
   const loadQuestions = useCallback(async () => { try { const response = await fetch("/api/questions", { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setQuestions(data.questions || []); setQuestionError(""); } catch { setQuestionError("Questions are temporarily unavailable."); } }, []);
   const loadPublication = useCallback(async () => {try {const response = await fetch("/api/publication", {cache: "no-store"}); const data = await response.json(); if (!response.ok) throw new Error(); setReporting(data.reporting || []); setEssayIdeas(data.ideas || []); setSettings(data.settings || null);} catch {}}, []);
+  const loadEssays = useCallback(async () => {try {const response = await fetch("/api/works", {cache: "no-store"}); const data = await response.json(); if (!response.ok) throw new Error(); setUploadedEssays(data.essays || []);} catch {}}, []);
   useEffect(() => {
     const refreshContent = () => {
       if (document.visibilityState !== "visible") return;
       loadQuestions();
       loadPublication();
+      loadEssays();
     };
     refreshContent();
     window.addEventListener("focus", refreshContent);
@@ -56,8 +60,14 @@ export default function Home() {
       window.removeEventListener("focus", refreshContent);
       document.removeEventListener("visibilitychange", refreshContent);
     };
-  }, [loadQuestions, loadPublication]);
-  const filtered = useMemo(() => filter === "All" ? essays : essays.filter((essay) => essay.tag === filter), [filter]);
+  }, [loadQuestions, loadPublication, loadEssays]);
+  const essays = useMemo(() => {
+    const uploaded = uploadedEssays.map((essay) => ({slug: essay.slug, title: essay.title, tag: "Essay", date: new Date(essay.published_at).toLocaleDateString("en-US", {month: "long", year: "numeric"}), blurb: essay.dek, readMinutes: essay.read_minutes}));
+    const uploadedSlugs = new Set(uploaded.map((essay) => essay.slug));
+    return [...uploaded, ...builtInEssays.filter((essay) => !uploadedSlugs.has(essay.slug))];
+  }, [uploadedEssays]);
+  const latestEssay = essays[0];
+  const filtered = useMemo(() => filter === "All" ? essays : essays.filter((essay) => essay.tag === filter), [filter, essays]);
 
   async function submitQuestion(event: FormEvent) {
     event.preventDefault();
@@ -111,15 +121,14 @@ export default function Home() {
       </section>
 
       <section className="latest wrap" aria-labelledby="latest-title">
-        <div className="section-rule"><span>Latest essay</span><small>Technology · 7 min read</small></div>
+        <div className="section-rule"><span>Latest essay</span><small>{latestEssay.tag} · {latestEssay.readMinutes} min read</small></div>
         <div className="latest-grid">
-          <div className="cover-art" aria-hidden="true"><span>01</span><div className="orbit orbit-one"/><div className="orbit orbit-two"/><b>THE<br/>FEED<br/>IS<br/>CHOOSING</b></div>
+          <div className="cover-art" aria-hidden="true"><span>01</span><div className="orbit orbit-one"/><div className="orbit orbit-two"/><b>{latestEssay.title.toUpperCase()}</b></div>
           <article>
-            <p className="eyebrow">Technology & democracy</p>
-            <h2 id="latest-title">Beyond the Algorithm</h2>
-            <p className="lead">We like to think we choose what we read. But every scroll is shaped by a system deciding what deserves our attention and what disappears.</p>
-            <p>Recommendation systems are now among the most powerful political editors in America. They have no newsroom, no front page, and almost no public accountability.</p>
-            <a className="button" href="/essays/beyond-the-algorithm">Read the essay <span>→</span></a>
+            <p className="eyebrow">{latestEssay.tag}</p>
+            <h2 id="latest-title">{latestEssay.title}</h2>
+            <p className="lead">{latestEssay.blurb}</p>
+            <a className="button" href={`/essays/${latestEssay.slug}`}>Read the essay <span>→</span></a>
           </article>
         </div>
       </section>
@@ -133,7 +142,7 @@ export default function Home() {
           {filtered.map((essay, index) => <article className="essay-card" key={essay.title}>
             <div className="card-meta"><span>{essay.tag}</span><span>{essay.date}</span></div>
             <span className="card-number">{String(index + 1).padStart(2, "0")}</span>
-            <h3>{essay.title}</h3><p>{essay.blurb}</p><a href="/essays/beyond-the-algorithm" aria-label={`Read ${essay.title}`}>Read <span>→</span></a>
+            <h3>{essay.title}</h3><p>{essay.blurb}</p><a href={`/essays/${essay.slug}`} aria-label={`Read ${essay.title}`}>Read <span>→</span></a>
           </article>)}
         </div>
       </section>
