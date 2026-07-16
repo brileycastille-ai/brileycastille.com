@@ -36,13 +36,17 @@ export async function POST(request: Request) {
       const {error} = await creator.supabase.from("essay_ideas").insert({title, overview, stage: payload.stage?.trim() || "Idea"});
       if (error) throw error;
       await notifySubscribers(creator.supabase, "notify_new_idea", {kind: "new_idea", title: `New essay idea: ${title}`, message: overview, href: "/#ideas"});
-    } else if (payload.type === "reporting") {
+    } else if (payload.type === "reporting" || payload.type === "reporting_update") {
       const title = payload.title?.trim();
       const description = payload.description?.trim();
       if (!title || !description) return Response.json({error: "A title and description are required."}, {status: 400});
-      const {error} = await creator.supabase.from("reporting").insert({title, description, status: payload.status?.trim() || "Planning", expected: payload.expected?.trim() || "To be announced", color: payload.color === "green" ? "green" : "amber"});
+      const values = {title, description, status: payload.status?.trim() || "Planning", expected: payload.expected?.trim() || "To be announced", color: payload.color === "green" ? "green" : "amber"};
+      const id = Number(payload.id);
+      if (payload.type === "reporting_update" && (!Number.isInteger(id) || id < 1)) return Response.json({error: "Choose a valid in-progress story to edit."}, {status: 400});
+      const request = payload.type === "reporting_update" ? creator.supabase.from("reporting").update(values).eq("id", id) : creator.supabase.from("reporting").insert(values);
+      const {error} = await request;
       if (error) throw error;
-      await notifySubscribers(creator.supabase, "notify_new_idea", {kind: "new_idea", title: `New story in progress: ${title}`, message: description, href: "/#progress"});
+      if (payload.type === "reporting") await notifySubscribers(creator.supabase, "notify_new_idea", {kind: "new_idea", title: `New story in progress: ${title}`, message: description, href: "/#progress"});
     } else if (payload.type === "about") {
       const about_heading = payload.heading?.trim();
       const about_body = payload.body?.trim();
